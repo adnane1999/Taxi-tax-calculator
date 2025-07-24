@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calculateur de Taxe pour Taxis</title>
+  <style>
+    :root {
+      --primary: #28a745;
+      --background: #e9fbe8;
+      --glass: rgba(255, 255, 255, 0.15);
+      --text: #111827;
+      --muted: #6b7280;
+      --radius: 12px;
+      --shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: url('bg5.png') no-repeat center center fixed;
+      background-size: cover;
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem;
+    }
+
+    .container {
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: var(--radius);
+      padding: 2rem;
+      max-width: 700px;
+      margin: auto;
+      box-shadow: var(--shadow);
+      color: #ffffff;
+    }
+
+    h2 {
+      margin-bottom: 1rem;
+      color: #218838;
+    }
+
+    label {
+      font-weight: 600;
+      margin-top: 1.5rem;
+      display: block;
+      color: #181818;
+    }
+
+    select, button {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: var(--radius);
+      border: 1px solid #ccc;
+      margin-top: 0.5rem;
+      font-size: 1rem;
+    }
+
+    button {
+      background-color: var(--primary);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      transition: background-color 0.2s ease;
+    }
+
+    button:hover {
+      background-color: #218838;
+    }
+
+    .checkboxes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: var(--radius);
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .result {
+      margin-top: 2rem;
+      padding: 1rem;
+      border: 1px solid #e5e7eb;
+      background-color: rgba(255, 255, 255, 0.2);
+      border-radius: var(--radius);
+      white-space: pre-wrap;
+      font-size: 1rem;
+      color: #181818;
+    }
+
+    .muted {
+      color: #757373;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Calculateur de Taxe pour Taxis</h2>
+    <p class="muted"><strong>Date actuelle :</strong> <span id="currentDate"></span></p>
+
+    <label for="taxiGrade">Catégorie de Taxi :</label>
+    <select id="taxiGrade">
+      <option value="1">1ère catégorie</option>
+      <option value="2">2ème catégorie</option>
+    </select>
+
+    <label>Choisissez les trimestres impayés :</label>
+    <div class="checkboxes" id="partList"></div>
+
+    <button onclick="calculateTax()">Calculer</button>
+    <button onclick="downloadPDF()">Télécharger le rapport (PDF)</button>
+
+    <div class="result" id="result"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Le script JS reste inchangé -->
+    <script>
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const currentPart = Math.floor((currentMonth - 1) / 3) + 1;
+    const currentAbsoluteIndex = currentYear * 4 + (currentPart - 1);
+
+    document.getElementById("currentDate").innerText = `${now.toLocaleString('fr-FR', { month: 'long' })} ${currentYear} (Trimestre ${currentPart})`;
+
+    const partListDiv = document.getElementById("partList");
+    for (let year = 2020; year <= currentYear; year++) {
+      for (let part = 1; part <= 4; part++) {
+        const absIndex = year * 4 + (part - 1);
+        const label = document.createElement("label");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = absIndex;
+        checkbox.dataset.year = year;
+        checkbox.dataset.part = part;
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(` Trimestre ${part} de ${year}`));
+        partListDiv.appendChild(label);
+      }
+    }
+
+    let latestReport = "";
+
+    function calculateTax() {
+      const checkboxes = document.querySelectorAll("#partList input:checked");
+      const taxiGrade = parseInt(document.getElementById("taxiGrade").value);
+
+      if (checkboxes.length === 0) {
+        document.getElementById("result").innerText = "Veuillez sélectionner au moins un trimestre.";
+        return;
+      }
+
+      const baseTaxPerPart = 150;
+      const secondTaxPerPart = taxiGrade === 1 ? 100 : 70;
+
+      let delayFee = 0;
+      let baseTax = 0;
+      let secondTax = 0;
+
+      const selectedParts = Array.from(checkboxes)
+        .map(cb => ({
+          absIndex: parseInt(cb.value),
+          year: cb.dataset.year,
+          part: cb.dataset.part
+        }))
+        .filter(p => p.absIndex < currentAbsoluteIndex)
+        .sort((a, b) => b.absIndex - a.absIndex);
+
+      const delayInfo = [];
+      selectedParts.forEach(p => {
+        const delayPartsCount = currentAbsoluteIndex - p.absIndex;
+        if (delayPartsCount <= 0) return;
+        const percent = 15 + (delayPartsCount - 1) * 1.5;
+        const fee = baseTaxPerPart * (percent / 100);
+        delayFee += fee;
+        delayInfo.push(`Trimestre ${p.part} de ${p.year} → +${percent.toFixed(1)}% = ${fee.toFixed(2)} Dh`);
+      });
+
+      const totalParts = checkboxes.length;
+      baseTax = baseTaxPerPart * totalParts;
+      secondTax = secondTaxPerPart * totalParts;
+      const total = baseTax + delayFee + secondTax;
+
+      latestReport =
+        `Rapport de Taxe Taxi\nGénéré le : ${now.toLocaleString('fr-FR')}\n\n` +
+        `Trimestres sélectionnés : ${totalParts}\n` +
+        `Trimestres en retard : ${selectedParts.length}\n\n` +
+        `⏰ Détail des pénalités :\n${delayInfo.join("\n")}\n\n` +
+        `Taxe 1 de base : ${baseTax.toFixed(2)} Dh\n` +
+        `Pénalité sur Taxe 1 : ${delayFee.toFixed(2)} Dh\n` +
+        `Taxe 2 : ${secondTax.toFixed(2)} Dh\n\n` +
+        `TOTAL : ${total.toFixed(2)} Dh`;
+
+      document.getElementById("result").innerText = latestReport;
+    }
+
+    function downloadPDF() {
+      if (!latestReport) {
+        alert("Veuillez d'abord calculer la taxe.");
+        return;
+      }
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.setFontSize(12);
+      const lines = doc.splitTextToSize(latestReport, 180);
+      doc.text(lines, 15, 20);
+      const filename = `Rapport_Taxe_Taxi_${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}.pdf`;
+      doc.save(filename);
+    }
+  </script>
+</body>
+</html>
