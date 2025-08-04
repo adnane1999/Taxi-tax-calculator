@@ -185,7 +185,7 @@
       selectedParts.forEach(p => {
         const delayPartsCount = currentAbsoluteIndex - p.absIndex;
         if (delayPartsCount <= 0) return;
-        const percent = 15 + (delayPartsCount - 1) * 1.5;
+        const percent = 15 + (delayPartsCount - 1) * 0.5;
         const fee = baseTaxPerPart * (percent / 100);
         delayFee += fee;
         delayInfo.push(`Trimestre ${p.part} de ${p.year} → +${percent.toFixed(1)}% = ${fee.toFixed(2)} Dh`);
